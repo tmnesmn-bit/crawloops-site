@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crawloops — Monitoring that doesn't silently lie</title>
+<meta name="description" content="crawloops catches broken scraper data and corrects it automatically, without re-crawling.">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root {
+    --bg: #f7f7f4;
+    --bg-elevated: #ffffff;
+    --bg-sunken: #efefea;
+    --text: #14171a;
+    --text-muted: #52585f;
+    --text-faint: #7b8288;
+    --border: #e2e2dc;
+    --accent: #0f766e;
+    --accent-text: #ffffff;
+    --accent-soft: #0f766e14;
+    --shadow: 0 1px 2px rgba(20, 23, 26, 0.04), 0 8px 24px rgba(20, 23, 26, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d0f;
+      --bg-elevated: #15181b;
+      --bg-sunken: #101315;
+      --text: #f1f2f0;
+      --text-muted: #a6adb2;
+      --text-faint: #767d82;
+      --border: #262b2e;
+      --accent: #2dd4bf;
+      --accent-text: #06201c;
+      --accent-soft: #2dd4bf1a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  header.site {
+    padding: 28px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    width: fit-content;
+  }
+
+  .brand svg { color: var(--accent); flex-shrink: 0; }
+
+  .brand sup {
+    font-size: 0.6em;
+    font-weight: 500;
+    color: var(--text-faint);
+    margin-left: 1px;
+  }
+
+  main { display: block; }
+
+  section { padding: 88px 0; }
+  section + section { border-top: 1px solid var(--border); }
+
+  .hero { padding: 96px 0 88px; text-align: center; }
+
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 3.4rem);
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    margin: 0 0 22px;
+    max-width: 18ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero p.lead {
+    font-size: 1.15rem;
+    color: var(--text-muted);
+    max-width: 56ch;
+    margin: 0 auto 36px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: var(--accent-text);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 14px 28px;
+    border-radius: 8px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); opacity: 0.94; }
+  .btn:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  .cta-note {
+    font-size: 0.9rem;
+    color: var(--text-faint);
+  }
+
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: -0.01em;
+    margin: 0 0 20px;
+    max-width: 32ch;
+  }
+
+  .section-head { text-align: center; margin: 0 auto 48px; max-width: 46ch; }
+  .section-head h2 { margin: 0 auto 12px; }
+  .section-head p { color: var(--text-muted); margin: 0; }
+
+  .problem p {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .problem h2 { text-align: center; margin-left: auto; margin-right: auto; }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+
+  .feature {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+
+  .feature h3 {
+    font-size: 1.05rem;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .feature p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.98rem;
+  }
+
+  .proof {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+
+  .stat {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .stat .num {
+    display: block;
+    font-size: clamp(1.9rem, 4vw, 2.4rem);
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .stat .desc {
+    font-size: 0.92rem;
+    color: var(--text-muted);
+  }
+
+  .proof-note {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-faint);
+    font-style: italic;
+    max-width: 50ch;
+    margin: 0 auto;
+  }
+
+  .who { text-align: center; }
+  .who p {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    max-width: 62ch;
+    margin: 0 auto;
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .price-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 28px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .price-card h3 {
+    font-size: 1.05rem;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+
+  .price-card .price { margin: 0 0 8px; }
+
+  .price-card .amount {
+    font-size: clamp(1.9rem, 4vw, 2.4rem);
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+
+  .price-card .period {
+    font-size: 0.95rem;
+    color: var(--text-faint);
+    margin-left: 2px;
+  }
+
+  .price-card .price-desc {
+    margin: 0 0 24px;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  .price-card .btn { width: 100%; }
+
+  .audit-cta {
+    background: var(--bg-sunken);
+  }
+
+  .audit-cta .wrap { text-align: center; }
+  .audit-cta h2 { margin-left: auto; margin-right: auto; }
+  .audit-cta p.lead {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 56ch;
+    margin: 0 auto 32px;
+  }
+
+  footer.site {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+  }
+
+  footer.site .wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  footer.site p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-faint);
+  }
+
+  footer.site a.bot-link {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  footer.site a.bot-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  @media (max-width: 700px) {
+    section { padding: 64px 0; }
+    .hero { padding: 64px 0 56px; }
+    .features { grid-template-columns: 1fr; }
+    .proof { grid-template-columns: 1fr; }
+    .pricing-grid { grid-template-columns: 1fr; }
+    footer.site .wrap { flex-direction: column; text-align: center; }
+  }
+
+  @media (max-width: 375px) {
+    .wrap { padding: 0 16px; }
+    .feature { padding: 22px; }
+    .price-card { padding: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="crawloops home">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M16 5a11 11 0 1 1-7.78 3.22" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <path d="M6.5 4.5v6.5H13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      crawloops<sup>™</sup>
+    </a>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Free 14-day audit — no card required</span>
+      <h1>Monitoring that doesn't silently lie.</h1>
+      <p class="lead">
+        Every scraper breaks the moment a site redesigns — and keeps feeding
+        you wrong data until a human notices. crawloops&trade; catches the
+        error and corrects it, automatically, without re-crawling.
+      </p>
+      <div class="cta-row">
+        <a class="btn" href="mailto:hello@crawloops.com?subject=Free%2014-day%20audit%20%E2%80%94%20crawloops">Request your free audit</a>
+        <span class="cta-note">Runs alongside your current tool. No card, nothing installed, no contract.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="problem">
+    <div class="wrap">
+      <h2>You already pay for competitor monitoring.</h2>
+      <p>
+        Here's what the invoice doesn't say: when the target site changes its
+        layout, your feed doesn't stop — it keeps delivering, confidently and
+        wrong. Stale prices. Phantom stock. Missed changes. You find out weeks
+        later, from a decision that went bad.
+      </p>
+    </div>
+  </section>
+
+  <section class="approach">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>What crawloops does differently</h2>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <h3>Errors get outvoted.</h3>
+          <p>
+            Every data point is read multiple independent ways; a broken
+            reading is detected and corrected by the agreeing majority —
+            with a log entry showing what would have silently gone wrong.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Storage heals itself.</h3>
+          <p>
+            Archived captures detect their own corruption and repair it.
+            Your historical record stays byte-exact.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>When we're not sure, we say so.</h3>
+          <p>
+            No confident garbage: a value that can't be verified is flagged
+            for review, never slipped into your feed.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Compliant by design.</h3>
+          <p>
+            robots.txt honored, identified crawler (crawloops.com/bot),
+            polite rate limits. Audit-friendly provenance on every value —
+            your due-diligence team will actually like us.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="proof-strip">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Results, not adjectives</h2>
+      </div>
+      <div class="proof">
+        <div class="stat">
+          <span class="num">0</span>
+          <span class="desc">wrong records across 2,700 fault-injected retrievals — baseline scraper: up to 4.7% silently wrong</span>
+        </div>
+        <div class="stat">
+          <span class="num">100%</span>
+          <span class="desc">extraction accuracy with half the extraction methods deliberately broken</span>
+        </div>
+        <div class="stat">
+          <span class="num">626 / 2,000</span>
+          <span class="desc">records corrected with zero re-crawls</span>
+        </div>
+      </div>
+      <p class="proof-note">Methodology page linked post-launch; scripts are reproducible.</p>
+    </div>
+  </section>
+
+  <section class="who">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Who it's for</h2>
+      </div>
+      <p>
+        D2C brands and retailers watching competitor prices and stock.
+        Compliance and procurement teams watching official pages where a
+        missed update costs money. Anyone whose current monitoring tool has
+        silently broken at least once.
+      </p>
+    </div>
+  </section>
+
+  <!-- Replace STRIPE_PAYMENT_LINK_* placeholders with real Stripe Payment Link URLs before going live — see docs/gtm/PAYMENTS_SETUP.md -->
+  <section class="pricing">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="eyebrow">Founding-partner pricing — first 10 customers</span>
+        <h2>The audit is free. Continuing is optional.</h2>
+        <p>
+          No card during the 14-day audit, ever. Pricing below only applies
+          if you choose to keep crawloops running afterward — rate locked
+          for 12 months for founding partners.
+        </p>
+      </div>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <h3>Starter</h3>
+          <p class="price"><span class="amount">$199</span><span class="period">/mo</span></p>
+          <p class="price-desc">100 pages monitored daily</p>
+          <a class="btn" href="STRIPE_PAYMENT_LINK_STARTER">Get started</a>
+        </div>
+        <div class="price-card">
+          <h3>Growth</h3>
+          <p class="price"><span class="amount">$499</span><span class="period">/mo</span></p>
+          <p class="price-desc">500 pages monitored daily</p>
+          <a class="btn" href="STRIPE_PAYMENT_LINK_GROWTH">Get started</a>
+        </div>
+        <div class="price-card">
+          <h3>Scale</h3>
+          <p class="price"><span class="amount">$1,499</span><span class="period">/mo</span></p>
+          <p class="price-desc">2,500 pages monitored daily</p>
+          <a class="btn" href="STRIPE_PAYMENT_LINK_SCALE">Get started</a>
+        </div>
+      </div>
+      <p class="proof-note">Month-to-month, cancel anytime. Data export included. Prices increase for customers 11 and later.</p>
+    </div>
+  </section>
+
+  <section class="audit-cta">
+    <div class="wrap">
+      <h2>A free second opinion, running alongside what you use now.</h2>
+      <p class="lead">
+        Pick 10 pages. For 14 days we read every value independently and
+        compare it with what your current tool reports, then send you a
+        report of every place we disagreed — our reading verified. Nothing
+        replaced, nothing installed, no card, no contract. If the report
+        comes back empty, we'll say so: your tooling is solid.
+      </p>
+      <a class="btn" href="mailto:hello@crawloops.com?subject=Free%2014-day%20audit%20%E2%80%94%20crawloops">Request your free audit</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>&copy; 2026 crawloops&trade;</p>
+    <a class="bot-link" href="bot.html">Crawler &amp; bot info (/bot)</a>
+  </div>
+</footer>
+
+</body>
+</html>
